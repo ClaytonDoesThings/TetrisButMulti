@@ -3,10 +3,16 @@ var socket = io();
 var activeUsers;
 
 var users;
+var me;
 
 var lobby;
 
+var caps = false;
+
 var chat;
+
+var chatBox = "";
+var chatBoxActive = false;
 
 var settings;
 
@@ -25,6 +31,7 @@ function joinLobby(id) {
 	
 	lobby.on('active users', (msg) => {
 		activeUsers = msg;
+		me = activeUsers[lobby.id];
 	});
 
 	lobby.on('users', (msg) => {
@@ -57,37 +64,51 @@ function sendInput(keyCode) {
 }
 
 function keyCodeToCharacter(keyCode) {
-	return (keyCode >= 65 && keyCode <= 90 ?
-		String.fromCharCode(keyCode+32) :
-		(keyCode >= 48 && keyCode <= 57 ?
-			String.fromCharCode(keyCode) :
-			(keyCode === 32 ?
-				" " :
-				""
-			)
+	return (
+		(keyCode >= 65 && keyCode <= 90) ||
+		(keyCode >= 48 && keyCode <= 57) ?
+		key :
+		(keyCode === 32 ?
+			" " :
+			""
 		)
 	);
 }
 
 function keyPressed() {
-	if (lobby && activeUsers && users && settings && !users[lobby.id].nickname) {
-		if (keyCode === 13 && nickname.length >= 3) {
-			lobby.emit('set nickname', nickname);
-		} else {
-			nickname += keyCodeToCharacter(keyCode);
+	if (lobby && activeUsers && users && settings) {
+		if (!me.nickname) {
+			if (keyCode === 13 && nickname.length >= 3) {
+				lobby.emit('set nickname', nickname);
+			} else if (keyCode === 8 && nickname.length > 0) {
+				nickname = nickname.substr(0, nickname.length-1);
+			} else {
+				nickname += keyCodeToCharacter(keyCode);
+			}
+		} else if (chatBoxActive) {
+			if (keyCode === 13 && chatBox.length > 0) {
+				lobby.emit('send chat', chatBox);
+				chatBox = "";
+			} else if (keyCode === 27) {
+				chatBoxActive = false;
+			} else if (keyCode === 8 && chatBox.length > 0) {
+				chatBox = chatBox.substr(0, chatBox.length-1);
+			} else {
+				chatBox += keyCodeToCharacter(keyCode);
+			}
 		}
-	} else {
-		sendInput(keyCode);
 	}
 }
 
 function draw() {
+	var mouseClicked = mouseIsPressed && !mouseDownLastFrame;
+
 	background(255*0.9);
 	if (!lobby) {
 		push();
 		if (mouseX <= 100 && mouseY <= 40) {
 			fill(0, 255, 0);
-			if (mouseIsPressed && !mouseDownLastFrame) {
+			if (mouseClicked) {
 				socket.emit('create lobby', '');
 			}
 		} else {
@@ -96,7 +117,7 @@ function draw() {
 		rect(0, 0, 100, 40);
 		pop();
 	} else if (lobby && activeUsers && users && settings) {
-		if (users[lobby.id].nickname === undefined) {
+		if (me.nickname === undefined) {
 			push();
 			textAlign(CENTER, CENTER);
 			text((nickname === "" ? "Type nickname" : nickname), width/2, height/2);
@@ -104,16 +125,36 @@ function draw() {
 		} else {
 			push();
 			textAlign(LEFT, TOP);
+			
+			let mouseOverChatBox = (
+				mouseX >= width*0.8 &&
+				mouseX <= width &&
+				mouseY >= height*0.1 &&
+				mouseY <= height*0.2
+			);
+
+			if (mouseClicked) {
+				chatBoxActive = mouseOverChatBox;
+			}
+
+			fill(chatBoxActive ? 255*0.98 : (mouseOverChatBox ? 255*0.97 : 255));
+			rect(width*0.8, height*0.1,width*0.2, height*0.1);
+			fill(0);
+			textSize(16);
+			text(chatBox + (chatBoxActive && Math.floor(millis()/800)%2 ? "|" : ""), width*0.81, height*0.11, width*0.09, height*0.09);
+
 			var s = "";
 			for (let i = chat.length-1; i > -1; i--) {
 				let c = chat[i];
 				s += (users[c.senderID].nickname + ": " + c.msg + "\n");
 			}
+			
 			fill(255);
 			rect(width*0.8, height*0.2, width*0.2, height*0.8);
 			fill(0);
 			textSize(16);
-			text(s, width*0.85, height*0.2, width*0.1, height*0.8);
+			text(s, width*0.85, height*0.21, width*0.1, height*0.79);
+			
 			translate(width*0.825, height*0.6);
 			textAlign(CENTER, CENTER);
 			rotate(-90*PI/180);

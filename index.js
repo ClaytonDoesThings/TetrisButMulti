@@ -50,6 +50,7 @@ io.on('connection', (socket) => {
 					socket.on('set nickname', (msg) => {
 						if (typeof(msg) === "string" && msg.length >= 3) {
 							user.nickname = msg;
+							this.emit('active users', lobby.activeUsers);
 							this.emit('users', lobby.users);
 						}
 					});
